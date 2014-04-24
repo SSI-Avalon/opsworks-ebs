@@ -26,8 +26,25 @@ The different options to use the `ebs` cookbook were to:
  
  git filter-branch --tag-name-filter cat --prune-empty --subdirectory-filter ebs HEAD
  
+ 
+ git tag -a srev_v1.0.0 -m srev_v1.0.0
+ 
  git remote add origin git@github.com:SSI-Avalon/opsworks-ebs.git
+ 
  
  git push
  
  ```
+
+## Usage
+
+In your Berksfile, now you can add:
+```
+cookbook 'ebs', :github => 'SSI-Avalon/opsworks-ebs'
+```
+
+And use the recipes like so:
+
+```
+include_recipe 'ebs::volumes`
+```
