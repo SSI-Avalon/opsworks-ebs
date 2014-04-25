@@ -36,6 +36,13 @@ The different options to use the `ebs` cookbook were to:
  
  ```
 
+## Dependency on `blank?` method
+
+The opsworks cookbook uses a tiny ActiveSupport extension provided as a library of the `opsworks-common` cookbook.
+
+It is not worth it. Instead let's remove the dependency and use the `empty?` method.
+
+
 ## Usage
 
 In your Berksfile, now you can add:
