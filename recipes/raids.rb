@@ -31,16 +31,21 @@ node.set[:ebs][:raids].each do |raid_device, options|
 
   ruby_block "Create or resume RAID array #{raid_device}" do
     block do
-      if BlockDevice.existing_raid_at?(raid_device)
+      actual_raid_device = BlockDevice.actual_raid_with_devices(options[:disks])
+      if BlockDevice.existing_raid_at?(raid_device) or
+          (actual_raid_device and BlockDevice.existing_raid_at?(actual_raid_device))
         if BlockDevice.assembled_raid_at?(raid_device)
           Chef::Log.info "Skipping RAID array at #{raid_device} - already assembled and probably mounted at #{options[:mount_point]}"
+        elsif actual_raid_device and BlockDevice.assembled_raid_at?(actual_raid_device)
+          raid_device = actual_raid_device
+          Chef::Log.info "Skipping RAID array at #{actual_raid_device} - already assembled and probably mounted at #{options[:mount_point]}"
         else
           BlockDevice.assemble_raid(raid_device, options)
         end
       else
         BlockDevice.create_raid(raid_device, options.update(:chunk_size => node[:ebs][:mdadm_chunk_size]))
       end
-      BlockDevice.set_read_ahead(raid_device, node[:ebs][:md_read_ahead])
+      BlockDevice.set_read_ahead(actual_raid_device || raid_device, node[:ebs][:md_read_ahead])
     end
     notifies :create, "ruby_block[Create or attach LVM volume out of #{raid_device}]", :immediately
   end

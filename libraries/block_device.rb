@@ -39,6 +39,22 @@ module BlockDevice
     end
   end
 
+  def self.actual_raid_with_devices(devices)
+    actual_raid_device = nil
+    sorted_devices = devices.sort
+    File.foreach('/proc/mdstat') do |line|
+      if match = /^(md[0-9]+) : ([^ ]+) ([^ ]+) (.*)$/.match(line)
+        if match.captures.last.split(' ').map {|s| '/dev/' + s.gsub(/[^\w].*/,'')}.sort == sorted_devices
+          # Return the actual RAID device-- sometimes when the RAID
+          # auto-assembles, the device is different than the one specified
+          actual_raid_device = '/dev/' + match[1]
+          break
+        end
+      end
+    end
+    actual_raid_device
+  end
+
   def self.assembled_raid_at?(device)
     raids = `mdadm --detail --scan`
     if raids.match(device) || raids.match(device.gsub(/md/, "md/"))
