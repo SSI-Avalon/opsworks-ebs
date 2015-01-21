@@ -13,6 +13,7 @@ node.set[:ebs][:raids].each do |raid_device, options|
   Chef::Log.info("Waiting for individual disks of RAID #{options[:mount_point]}")
   options[:disks].each do |disk_device|
     BlockDevice::wait_for(disk_device)
+    BlockDevice.set_read_ahead(disk_device, node[:ebs][:md_read_ahead])
   end
 
   execute "mkfs_#{lvm_device}" do
@@ -24,6 +25,7 @@ node.set[:ebs][:raids].each do |raid_device, options|
     block do
       BlockDevice.create_lvm(raid_device, options)
       BlockDevice.wait_for(lvm_device)
+      BlockDevice.set_read_ahead(lvm_device, node[:ebs][:md_read_ahead])
     end
     action :nothing
     notifies :run, "execute[mkfs_#{lvm_device}]", :immediately

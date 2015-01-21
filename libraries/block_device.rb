@@ -101,9 +101,9 @@ module BlockDevice
     exec_command("yes n | mdadm --create --chunk=#{options[:chunk_size]} --metadata=1.2 --verbose #{raid_device} --level=#{options[:raid_level]} --raid-devices=#{options[:disks].size} #{options[:disks].join(' ')}") or raise "Failed to create the RAID array at #{raid_device}"
   end
 
-  def self.set_read_ahead(raid_device, ahead_option)
-    Chef::Log.info "Setting read ahead options for RAID array #{raid_device} to #{ahead_option}"
-    exec_command("blockdev --setra #{ahead_option} #{raid_device}") or raise "Failed to set read ahead options for RAID array at #{raid_device} to #{ahead_option}"
+  def self.set_read_ahead(device, ahead_option)
+    Chef::Log.info "Setting read ahead options for RAID array #{device} to #{ahead_option}"
+    exec_command("blockdev --setra #{ahead_option} #{device}") or raise "Failed to set read ahead options for device at #{device} to #{ahead_option}"
   end
 
   def self.lvm_device(raid_device)
