@@ -129,13 +129,13 @@ module BlockDevice
 
   def self.create_lvm(raid_device, actual_raid_device = nil, options)
     Chef::Log.info "creating LVM volume out of #{actual_raid_device || raid_device} with #{options[:disks].size} disks at #{options[:mount_point]}"
-    unless lvm_physical_group_exists?(raid_device)
-      exec_command("pvcreate #{raid_device}") or raise "Failed to create LVM physical disk for #{raid_device}"
+    unless lvm_physical_group_exists?(actual_raid_device || raid_device)
+      exec_command("pvcreate #{actual_raid_device || raid_device}") or raise "Failed to create LVM physical disk for #{raid_device}"
     end
     unless lvm_volume_group_exists?(raid_device)
       exec_command("vgcreate #{lvm_volume_group(raid_device)} #{actual_raid_device || raid_device}") or raise "Failed to create LVM volume group for #{raid_device}"
     end
-    unless lvm_volume_exits?(raid_device)
+    unless lvm_volume_exists?(raid_device)
       extends = `vgdisplay #{lvm_volume_group(raid_device)} | grep Free`.scan(/\d+/)[0]
       exec_command("lvcreate -l #{extends} #{lvm_volume_group(raid_device)} -n #{File.basename(lvm_device(raid_device))}") or raise "Failed to create the LVM volume at #{raid_device}"
     end
@@ -167,7 +167,7 @@ module BlockDevice
     end
   end
 
-  def self.lvm_volume_exits?(raid_device)
+  def self.lvm_volume_exists?(raid_device)
     wait_for_logical_volumes
     lvscan = `lvscan`
     if lvscan.match(lvm_device(raid_device))
