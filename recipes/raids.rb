@@ -29,7 +29,7 @@ node.set[:ebs][:raids].each do |raid_device, options|
 
   ruby_block "Create or attach LVM volume out of #{raid_device}" do
     block do
-      BlockDevice.create_lvm(actual_raid_device || raid_device, options)
+      BlockDevice.create_lvm(raid_device, actual_raid_device, options)
       BlockDevice.wait_for(lvm_device)
       BlockDevice.set_read_ahead(lvm_device, node[:ebs][:md_read_ahead])
     end
