@@ -21,9 +21,15 @@ node.set[:ebs][:raids].each do |raid_device, options|
     action :nothing
   end
 
+  # After a reboot, the OS will usually assemble the RAID automatically.
+  # Unfortunately, sometimes it reassigns the RAID to a different device number
+  # (such as /dev/md127 instead of /dev/md0).  Here we find the actual raid
+  # device, if any, for the given disks.  Returns 'nil' if none.
+  actual_raid_device = BlockDevice.actual_raid_with_devices(options[:disks])
+
   ruby_block "Create or attach LVM volume out of #{raid_device}" do
     block do
-      BlockDevice.create_lvm(raid_device, options)
+      BlockDevice.create_lvm(actual_raid_device || raid_device, options)
       BlockDevice.wait_for(lvm_device)
       BlockDevice.set_read_ahead(lvm_device, node[:ebs][:md_read_ahead])
     end
@@ -33,18 +39,18 @@ node.set[:ebs][:raids].each do |raid_device, options|
 
   ruby_block "Create or resume RAID array #{raid_device}" do
     block do
-      actual_raid_device = BlockDevice.actual_raid_with_devices(options[:disks])
       if BlockDevice.existing_raid_at?(raid_device) or
           (actual_raid_device and BlockDevice.existing_raid_at?(actual_raid_device))
         if BlockDevice.assembled_raid_at?(raid_device)
           Chef::Log.info "Skipping RAID array at #{raid_device} - already assembled and probably mounted at #{options[:mount_point]}"
         elsif actual_raid_device and BlockDevice.assembled_raid_at?(actual_raid_device)
-          raid_device = actual_raid_device
           Chef::Log.info "Skipping RAID array at #{actual_raid_device} - already assembled and probably mounted at #{options[:mount_point]}"
         else
+          actual_raid_device = nil
           BlockDevice.assemble_raid(raid_device, options)
         end
       else
+        actual_raid_device = nil
         BlockDevice.create_raid(raid_device, options.update(:chunk_size => node[:ebs][:mdadm_chunk_size]))
       end
       BlockDevice.set_read_ahead(actual_raid_device || raid_device, node[:ebs][:md_read_ahead])
