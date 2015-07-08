@@ -55,3 +55,18 @@ And use the recipes like so:
 ```
 include_recipe 'ebs::volumes`
 ```
+
+## Updating
+
+Make your updates, commit, and then add a new tag for versioning.  For example, for version 1.0.8:
+```
+git tag -a srev_v1.0.8 -m srev_v1.0.8
+git push origin srev_v1.0.8
+```
+
+In the Berksfile in the repo that uses this, change the version:
+```
+cookbook 'ebs', :github => 'SSI-Avalon/opsworks-ebs', :tag => 'srev_v1.0.8'
+```
+
+Then, push the update through the pipeline.
