@@ -26,17 +26,20 @@ module BlockDevice
     end
   end
 
-  def self.existing_raid_at?(device)
-    raids = `mdadm --examine --scan`
-    if raids.match(device) || raids.match(device.gsub(/md/, "md/"))
-      Chef::Log.debug("Checking for existing RAID arrays at #{device}: #{raids}")
-      Chef::Log.info("Checking for existing RAID arrays at #{device}: true")
-      true
+  def self.existing_raid_at?(device, disk_devices = nil)
+    exists = false
+    if disk_devices and disk_devices.count > 0
+      # check the disks first
+      array_uuid = `mdadm --examine #{disk_devices.first} | grep "Array UUID"`
+      Chef::Log.info("Checking for existing RAID array using device #{disk_devices.first}: #{array_uuid}")
+      exists = true if array_uuid =~ /Array UUID/
     else
-      Chef::Log.debug("Checking for existing RAID arrays at #{device}: #{raids}")
-      Chef::Log.info("Checking for existing RAID arrays at #{device}: false")
-      false
+      raids = `mdadm --examine --scan`
+      Chef::Log.info("Checking for existing RAID array at #{device}: #{raids}")
+      exists = true if raids.match(device) || raids.match(device.gsub(/md/, "md/"))
     end
+    Chef::Log.info("Checking for existing RAID array at #{device}: #{exists}")
+    exists
   end
 
   def self.actual_raid_with_devices(devices)
@@ -129,7 +132,7 @@ module BlockDevice
 
   def self.create_lvm(raid_device, actual_raid_device = nil, options)
     Chef::Log.info "creating LVM volume out of #{actual_raid_device || raid_device} with #{options[:disks].size} disks at #{options[:mount_point]}"
-    unless lvm_physical_group_exists?(actual_raid_device || raid_device)
+    unless lvm_physical_volume_exists?(actual_raid_device || raid_device)
       exec_command("pvcreate #{actual_raid_device || raid_device}") or raise "Failed to create LVM physical disk for #{raid_device}"
     end
     unless lvm_volume_group_exists?(raid_device)
@@ -141,44 +144,32 @@ module BlockDevice
     end
   end
 
-  def self.lvm_physical_group_exists?(raid_device)
+  def self.lvm_physical_volume_exists?(raid_device)
+    exists = false
     pvscan = `pvscan`
-    if pvscan.match(raid_device)
-      Chef::Log.debug("Checking for existing LVM physical disk for #{raid_device}: #{pvscan}")
-      Chef::Log.debug("Checking for existing LVM physical disk for #{raid_device}: true")
-      true
-    else
-      Chef::Log.debug("Checking for existing LVM physical disk for #{raid_device}: #{pvscan}")
-      Chef::Log.debug("Checking for existing LVM physical disk for #{raid_device}: false")
-      false
-    end
+    Chef::Log.info("Checking for existing LVM physical disk for #{raid_device}: #{pvscan}")
+    exists = true if pvscan.match(raid_device)
+    Chef::Log.info("Checking for existing LVM physical disk for #{raid_device}: #{exists}")
+    exists
   end
 
   def self.lvm_volume_group_exists?(raid_device)
+    exists = false
     vgscan = `vgscan`
-    if vgscan.match(lvm_volume_group(raid_device))
-      Chef::Log.debug("Checking for existing LVM volume group for #{lvm_volume_group(raid_device)}: #{vgscan}")
-      Chef::Log.debug("Checking for existing LVM volume group for #{lvm_volume_group(raid_device)}: true")
-      true
-    else
-      Chef::Log.debug("Checking for existing LVM volume group for #{lvm_volume_group(raid_device)}: #{vgscan}")
-      Chef::Log.debug("Checking for existing LVM volume group for #{lvm_volume_group(raid_device)}: false")
-      false
-    end
+    Chef::Log.info("Checking for existing LVM volume group for #{lvm_volume_group(raid_device)}: #{vgscan}")
+    exists = true if vgscan.match(lvm_volume_group(raid_device))
+    Chef::Log.info("Checking for existing LVM volume group for #{lvm_volume_group(raid_device)}: #{exists}")
+    exists
   end
 
   def self.lvm_volume_exists?(raid_device)
     wait_for_logical_volumes
+    exists = false
     lvscan = `lvscan`
-    if lvscan.match(lvm_device(raid_device))
-      Chef::Log.debug("Checking for existing LVM volume disk for #{lvm_device(raid_device)}: #{lvscan}")
-      Chef::Log.debug("Checking for existing LVM volume disk for #{lvm_device(raid_device)}: true")
-      true
-    else
-      Chef::Log.debug("Checking for existing LVM volume disk for #{lvm_device(raid_device)}: #{lvscan}")
-      Chef::Log.debug("Checking for existing LVM volume disk for #{lvm_device(raid_device)}: false")
-      false
-    end
+    Chef::Log.info("Checking for existing LVM volume disk for #{lvm_device(raid_device)}: #{lvscan}")
+    exists = true if lvscan.match(lvm_device(raid_device))
+    Chef::Log.info("Checking for existing LVM volume disk for #{lvm_device(raid_device)}: #{exists}")
+    exists
   end
 
   def self.exec_command(command)

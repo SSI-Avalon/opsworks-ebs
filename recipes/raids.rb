@@ -8,24 +8,31 @@ end
 
 node.set[:ebs][:raids].each do |raid_device, options|
   Chef::Log.info "Processing RAID #{raid_device} with options #{options} "
+
+  if File.read('/etc/mtab').split("\n").any? {|line| line.match(" #{options[:mount_point]} ") }
+    Chef::Log.warn("Something is already mounted at #{options[:mount_point]}-- skipping RAID")
+    return
+  end
+
   lvm_device = BlockDevice.lvm_device(raid_device)
+  disk_devices = options[:disks]
 
   Chef::Log.info("Waiting for individual disks of RAID #{options[:mount_point]}")
-  options[:disks].each do |disk_device|
-    BlockDevice::wait_for(disk_device)
+  disk_devices.each do |disk_device|
+    BlockDevice.wait_for(disk_device)
     BlockDevice.set_read_ahead(disk_device, node[:ebs][:md_read_ahead])
   end
 
   execute "mkfs_#{lvm_device}" do
     command "test \"$(blkid -s TYPE -o value #{lvm_device})\" = \"#{options[:fstype]}\" || mkfs -t #{options[:fstype]} #{lvm_device}"
-    action :nothing
+    action :nothing # don't run yet, wait for trigger by a block below
   end
 
   # After a reboot, the OS will usually assemble the RAID automatically.
   # Unfortunately, sometimes it reassigns the RAID to a different device number
   # (such as /dev/md127 instead of /dev/md0).  Here we find the actual raid
   # device, if any, for the given disks.  Returns 'nil' if none.
-  actual_raid_device = BlockDevice.actual_raid_with_devices(options[:disks])
+  actual_raid_device = BlockDevice.actual_raid_with_devices(disk_devices)
 
   ruby_block "Create or attach LVM volume out of #{raid_device}" do
     block do
@@ -33,7 +40,7 @@ node.set[:ebs][:raids].each do |raid_device, options|
       BlockDevice.wait_for(lvm_device)
       BlockDevice.set_read_ahead(lvm_device, node[:ebs][:md_read_ahead])
     end
-    action :nothing
+    action :nothing # don't run yet, wait for trigger by a block below
     notifies :run, "execute[mkfs_#{lvm_device}]", :immediately
   end
 
@@ -55,7 +62,7 @@ node.set[:ebs][:raids].each do |raid_device, options|
       end
       BlockDevice.set_read_ahead(actual_raid_device || raid_device, node[:ebs][:md_read_ahead])
     end
-    notifies :create, "ruby_block[Create or attach LVM volume out of #{raid_device}]", :immediately
+    notifies :run, "ruby_block[Create or attach LVM volume out of #{raid_device}]", :immediately
   end
 
   directory options[:mount_point] do
